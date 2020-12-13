@@ -37,8 +37,28 @@ def truncate_str(str):
     return str + '\n'
 
 
+# Функция для переименования старого файла пользователя.
+# Возвращает False, если возникла ошибка при чтении файла.
+# Второе значение - путь к переименованному файлу.
+# Нужен, если вдруг возникнет ошибка записи в новый файл.
+def rename_file(username):
+    # Записываем путь до файла.
+    path = 'tasks/' + username + '.txt'
+    try:
+        with open(path) as file:
+            # Достаем дату из файла и преобразуем ее в другой формат.
+            date = dparser.parse(file.readlines()[1].split('> ')[1], fuzzy=True).isoformat()
+    except:
+        print('Возникла ошибка при чтении файла для переименования.')
+        return (False, '')
+    # Переименовываем файл.
+    new_path = 'tasks/old_' + username + '_' + date + '.txt'
+    os.rename(path, new_path)
+    return (True, new_path)
+
+
 # Функция для создания актуального файла пользователя.
-def make_file(user_id, data_users, data_todos):
+def make_file(user_id, data_users, data_todos, old_file):
     # Списки для задач пользователя
     tasks = []
     completed_tasks = []
@@ -78,19 +98,18 @@ def make_file(user_id, data_users, data_todos):
 
     # Записываем все данные в файл
     print('Записываем данные в файл...')
-    with open('tasks/' + username + '.txt', 'w+') as file:
-        file.write(file_header)
-
-
-# Функция для переименования старого файла пользователя.
-def rename_file(username):
-    # Записываем путь до файла.
-    path = 'tasks/' + username + '.txt'
-    with open(path) as file:
-        # Достаем дату из файла и преобразуем ее в другой формат.
-        date = dparser.parse(file.readlines()[1].split('> ')[1], fuzzy=True).isoformat()
-    # Переименовываем файл.
-    os.rename(path, 'tasks/old_' + username + '_' + date + '.txt')
+    try:
+        with open('tasks/' + username + '.txt', 'w+') as file:
+            file.write(file_header)
+    except:
+        # При возникновении ошибки удаляем файл
+        print('Возникла ошибка при записи в файл.')
+        print('Файл будет удален.')
+        if os.path.isfile('tasks/' + username + '.txt'):
+            os.remove('tasks/' + username + '.txt')
+        if not old_file:
+            print('Восстанавливаем старый файл.')
+            os.rename(old_file, 'tasks/' + username + '.txt')
 
 
 def main():
@@ -109,10 +128,17 @@ def main():
             # Если файл уже существует, то переименовываем его.
             if os.path.isfile('tasks/' + user.get('username') + '.txt'):
                 print('Переименовываем старый файл ' + user.get('username') + '...')
-                rename_file(user.get('username'))
+                read_errors, old_file_path = rename_file(user.get('username'))
+                # Если функция вернула False, значит есть ошибка чтения.
+                # Идем к следующей итерации цикла, чтобы не создавать новый файл.
+                if not read_errors:
+                    print('Пропускаем данный файл.')
+                    continue
+            else:
+                old_file_path = ''
             # Создаем новый файл.
             print('Создаем актуальный файл для ' + user.get('username') + '...')
-            make_file(user.get('id'), data_users, data_todos)
+            make_file(user.get('id'), data_users, data_todos, old_file_path)
     print('### Конец работы скрипта ###')
 
 
